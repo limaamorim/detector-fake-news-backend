@@ -1,0 +1,94 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Ambiente virtual
+venv/
+.venv/
+env/
+ENV/
+
+# =========================
+# Variáveis de ambiente
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+
+# =========================
+# Testes e cobertura
+# =========================
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# =========================
+# IDEs e Editores
+# =========================
+
+# VS Code
+.vscode/
+
+# PyCharm
+.idea/
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Mac
+.DS_Store
+
+# =========================
+# Build e Distribuição
+# =========================
+build/
+dist/
+*.egg-info/
+
+# =========================
+# Docker
+# =========================
+docker-compose.override.yml
+
+# =========================
+# OCR / Uploads
+# =========================
+uploads/
+temp/
+tmp/
+*.jpg
+*.jpeg
+*.png
+*.webp
+
+# Se quiser manter a pasta mas não os arquivos:
+#!uploads/.gitkeep
+
+# =========================
+# Banco de dados local
+# =========================
+*.db
+*.sqlite
+*.sqlite3
+
+# =========================
+# Jupyter
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# Sistema Operacional
+# =========================
+*.swp
+*.swo
