@@ -1,12 +1,12 @@
-# TODO - README acadêmico (FakeCheck AI)
+# FakeCheck AI - TODO (Imagem - redução de falsos positivos)
 
-- [ ] Levantar entendimento do projeto (capa, seções 1–18, fidelidade ao código)
-- [ ] Reescrever README.md completo com linguagem acadêmica e layout profissional
-- [ ] Garantir que endpoints e fluxos descritos correspondem aos controllers e services implementados
-- [ ] Garantir que fórmula e classificações refletem exatamente o scoring_service
-- [ ] Estruturar a seção de arquitetura com diagramas em Markdown
-- [ ] Incluir instalação e variáveis de ambiente coerentes com o backend (OPENROUTER_*)
-- [ ] Incluir exemplos de requests/responses (baseados nos schemas Pydantic)
-- [ ] Atualizar comandos Docker (conforme Dockerfile existente)
-- [ ] Substituir README.md atual pelo novo README final
+## Planejado
+- [x] Ajustar `calcular_score_imagem()` em `backend/app/services/scoring_service.py` para aplicar baseline e remover vieses estruturais que derrubam scores de imagens simples.
+
+- [x] Refinar prompt em `backend/app/services/ai_service.py` para não considerar ausência de fonte/OCR como evidência de falsidade e para tratar headlines simples com evidência moderada.
+
+- [x] Melhorar preprocessing OCR e normalização de texto em `backend/app/services/image_analyzer.py` (grayscale+contraste+binarização; correção de erros comuns e normalização de acentos).
+
+- [x] Validar rapidamente com exemplos de OCR/headline e checar que classificação não fica mais em "Possível Desinformação" para casos plausíveis.
+
 

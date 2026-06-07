@@ -47,17 +47,40 @@ Retorne APENAS JSON válido, sem markdown, sem explicações, sem código fence.
 Nunca afirme que algo é verdadeiro ou falso."""
 
 _PROMPT_USUARIO = """
-Analise o TEXTO JORNALÍSTICO abaixo.
+Analise o texto abaixo.
 
 IMPORTANTE:
 
-- Avalie o TOM do autor do texto.
-- NÃO avalie frases citadas como exemplos.
-- NÃO avalie alegações de terceiros.
-- NÃO considere fake news reproduzidas para fins de explicação.
-- Considere apenas a forma como o artigo foi escrito.
+- NÃO determine se é verdadeiro ou falso.
+- NÃO faça fact-checking completo.
+- Avalie apenas os sinais presentes no texto.
 
-Retorne apenas JSON válido:
+Regras específicas para imagens/OCR (muito importante):
+- Erros comuns de OCR (troca de letras, acentos, palavras parcialmente ilegíveis) NÃO devem reduzir evidência ou credibilidade.
+- A ausência de autor, data ou fonte no texto NÃO deve ser interpretada como desinformação.
+- Se o texto parecer uma manchete simples e plausível (sem alegações extraordinárias), atribua evidência moderada (40-60) mesmo sem fonte.
+
+Ao calcular EVIDÊNCIA considere:
+
+
+1. Presença de fontes.
+2. Presença de dados.
+3. Presença de estudos citados.
+4. Compatibilidade com conhecimento amplamente aceito.
+5. Plausibilidade da afirmação.
+
+Exemplos:
+
+"Beber água ajuda na hidratação."
+→ evidência alta
+
+"Vacinas causam chips de rastreamento."
+→ evidência muito baixa
+
+"Terremoto destruirá o Brasil amanhã."
+→ evidência muito baixa
+
+Retorne apenas JSON:
 
 {
   "sensacionalismo": 0,
@@ -66,21 +89,35 @@ Retorne apenas JSON válido:
   "afirmacoes": []
 }
 
-Regras:
+Sensacionalismo:
+0 = neutro
+100 = extremamente alarmista
 
-sensacionalismo:
-0 = linguagem neutra e informativa
-25 = leve apelo emocional
-50 = manchete exagerada
-75 = forte sensacionalismo
-100 = conteúdo extremamente alarmista
+Ao calcular evidência considere:
 
-evidencia:
-0 = sem fontes ou dados
-25 = poucas evidências
-50 = algumas referências
-75 = referências confiáveis
-100 = fontes verificáveis, estudos, órgãos oficiais ou especialistas
+- presença de fontes
+- presença de estudos
+- presença de especialistas
+- compatibilidade com conhecimento científico conhecido
+- plausibilidade da afirmação
+
+IMPORTANTE:
+
+Não considere ausência de fonte como evidência de falsidade.
+
+Se o texto fizer uma afirmação plausível e comum
+(ex.: beber água faz bem, exercício melhora saúde,
+alimentação saudável ajuda no emagrecimento),
+atribua evidência moderada (40-60) mesmo sem fontes explícitas.
+
+Uma afirmação plausível não deve receber nota muito baixa apenas por ausência de fonte na imagem.
+
+Evidência:
+0 = afirmação sem base plausível
+25 = muito fraca
+50 = plausível mas sem comprovação apresentada
+75 = plausível com indícios ou referências
+100 = forte embasamento e fontes verificáveis
 
 Texto:
 """

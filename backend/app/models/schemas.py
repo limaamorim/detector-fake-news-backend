@@ -51,7 +51,11 @@ class Indicadores(BaseModel):
 # ---------------------------------------------------------------------------
 
 class AnalysisResponse(BaseModel):
-    """Resposta padrão para análises de URL e imagem."""
+    """Resposta padrão para análises de URL e imagem.
+
+    Campos adicionais (tema) são opcionais para não quebrar compatibilidade
+    com o fluxo original.
+    """
 
     score: int
     classificacao: str
@@ -63,6 +67,12 @@ class AnalysisResponse(BaseModel):
     pontos_positivos: list[str]
     pontos_atencao: list[str]
     possiveis_inconsistencias: list[str]
+
+    # --- Campos opcionais para validação de tema ---
+    tema_suportado: bool | None = None
+    tema_detectado: str | None = None
+    mensagem: str | None = None
+
 
 
 # ---------------------------------------------------------------------------

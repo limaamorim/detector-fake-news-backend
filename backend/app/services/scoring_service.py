@@ -90,6 +90,7 @@ def calcular_score_url(
     # --- 1. Credibilidade da fonte (até 40 pts) ---
     pontos.score_fonte, pontos.credibilidade_fonte = _avaliar_fonte(
         conteudo.dominio, pontos
+        
     )
 
     # --- 2. Autor (10 pts) ---
@@ -111,7 +112,8 @@ def calcular_score_url(
         pontos.score_referencias = 15
         pontos.positivos.append("Texto contém referências ou fontes externas.")
     else:
-        pontos.atencao.append("Nenhuma referência externa identificada.")
+        pontos.score_referencias = 5
+        pontos.atencao.append("Poucas referência externa identificada.")
 
     # --- 5. Penalidade texto curto ---
     if conteudo.contagem_palavras < 100:
@@ -126,12 +128,16 @@ def calcular_score_url(
         analise_ia.evidencia, pontos
     )
 
+    
+
     # --- 7. Sensacionalismo (sinal da IA, até 10 pts) ---
     pontos.score_sensacionalismo = _calcular_pontos_sensacionalismo(
         analise_ia.sensacionalismo, pontos
     )
 
     score_total = _somar_score(pontos)
+
+    score_total = max(0, min(100, score_total))
 
     return _montar_resposta(
         score=score_total,
@@ -146,37 +152,63 @@ def calcular_score_url(
 
 
 def calcular_score_imagem(analise_ia: AIAnalysis) -> AnalysisResponse:
+    """Calcula o score de confiabilidade para análise de imagem.
+
+    Regras (para evitar falsos positivos em manchetes simples):
+    - ausência de autor/data/fonte NÃO deve derrubar score;
+    - imagens começam com um baseline neutro e ajustam apenas por
+      sinais semânticos (evidência e sensacionalismo);
+    - classificação "Possível Desinformação" deve depender de sinais
+      realmente ruins (ex.: baixo nível de evidência + alto sensacionalismo,
+      ou ausência de plausibilidade detectada).
     """
-    Calcula o score de confiabilidade para análise de imagem.
 
-    Imagens não possuem metadados de fonte, autor ou data.
-    A pontuação é baseada principalmente nos sinais semânticos da IA.
-
-    Args:
-        analise_ia: Resultado semântico fornecido pela IA sobre o texto OCR.
-
-    Returns:
-        AnalysisResponse completo.
-    """
     pontos = _PontosDetalhe()
 
-    # Imagens não têm fonte verificável
-    pontos.score_fonte = _SCORE_BAIXA
-    pontos.credibilidade_fonte = 30
-    pontos.atencao.append("Fonte da imagem não verificável.")
-    pontos.atencao.append("Sem informações de autor ou data de publicação.")
+    # Baseline: imagens sem metadados não são automaticamente "baixas".
+    # Usamos credibilidade_fonte como indicativo de "verificabilidade"
+    # (não como penalidade) e iniciamos o score com um valor neutro.
+    pontos.credibilidade_fonte = 55
+    pontos.atencao.append(
+        "A imagem não possui metadados suficientes para verificar fonte, autor ou data."
+    )
+    pontos.positivos.append(
+        "Avaliação baseada no conteúdo textual extraído via OCR (sem inferir falsidade por ausência de fonte)."
+    )
 
     # Evidências e sensacionalismo via sinais da IA
-    pontos.score_evidencias = _calcular_pontos_evidencia(
-        analise_ia.evidencia, pontos
-    )
+    # (esses valores já carregam a lógica de plausibilidade/sensatez do modelo).
+    pontos.score_evidencias = _calcular_pontos_evidencia(analise_ia.evidencia, pontos)
     pontos.score_sensacionalismo = _calcular_pontos_sensacionalismo(
         analise_ia.sensacionalismo, pontos
     )
 
-    score_total = _somar_score(pontos)
+    # Ajustes finos para manchetes simples
+    # Se o modelo entender como plausível/normal (evidência moderada),
+    # evitamos derrubar abaixo de ~50.
+    baseline = 50
+    if analise_ia.evidencia >= 40 and analise_ia.sensacionalismo <= 60:
+        baseline += 5
+        pontos.positivos.append(
+            "Conteúdo com tom informativo e afirmações plausíveis (sem sinais fortes de apelo emocional)."
+        )
+
+    # Se houver muito sensacionalismo + pouca evidência, sinalizamos possível desinformação.
+    # Isso substitui penalidades por ausência de fonte.
+    penalty_extra = 0
+    if analise_ia.evidencia <= 25 and analise_ia.sensacionalismo >= 70:
+        penalty_extra = 20
+        pontos.inconsistencias.append(
+            "Baixo embasamento semântico combinado com alto sensacionalismo." 
+        )
+
+    # Componentes do _somar_score seriam pequenos; então calculamos score total
+    # usando baseline + componentes semânticos.
+    score_total = baseline + pontos.score_evidencias + pontos.score_sensacionalismo - penalty_extra
+    score_total = max(0, min(100, score_total))
 
     return _montar_resposta(
+
         score=score_total,
         tipo="image",
         titulo=None,
@@ -186,6 +218,7 @@ def calcular_score_imagem(analise_ia: AIAnalysis) -> AnalysisResponse:
         analise_ia=analise_ia,
         pontos=pontos,
     )
+
 
 
 # ---------------------------------------------------------------------------
@@ -266,7 +299,7 @@ def _calcular_pontos_sensacionalismo(
     Returns:
         Pontos (0-10): baixo sensacionalismo = mais pontos.
     """
-    pts = round((100 - nivel_sensacionalismo) * 0.15)
+    pts = round((100 - nivel_sensacionalismo) * 0.10)
 
     if nivel_sensacionalismo <= 30:
         pontos.positivos.append("Linguagem objetiva e sem sensacionalismo detectado.")
@@ -300,6 +333,7 @@ def _somar_score(pontos: _PontosDetalhe) -> int:
         + pontos.score_evidencias
         + pontos.score_sensacionalismo
     )
+
     return max(0, min(100, total))
 
 
@@ -330,7 +364,12 @@ def _montar_resposta(
         AnalysisResponse completo.
     """
     # Normaliza indicadores de referências para o response
-    referencias_score = 100 if pontos.score_referencias == 15 else 0
+    if pontos.score_referencias == 15:
+        referencias_score = 100
+    elif pontos.score_referencias == 5:
+        referencias_score = 50
+    else:
+        referencias_score = 0
 
     return AnalysisResponse(
         score=score,

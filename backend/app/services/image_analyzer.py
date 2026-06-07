@@ -10,8 +10,8 @@ Suporta formatos: jpg, jpeg, png, webp.
 
 import io
 import logging
+import re
 from functools import lru_cache
-from typing import Optional
 
 import easyocr
 import numpy as np
@@ -24,7 +24,7 @@ FORMATOS_ACEITOS = {"image/jpeg", "image/png", "image/webp", "image/jpg"}
 EXTENSOES_ACEITAS = {".jpg", ".jpeg", ".png", ".webp"}
 
 # Confiança mínima do OCR para considerar um bloco de texto válido
-_CONFIANCA_MINIMA = 0.3
+_CONFIANCA_MINIMA = 0.2
 
 
 @lru_cache(maxsize=1)
@@ -43,21 +43,10 @@ def _get_reader() -> easyocr.Reader:
 
 
 def extrair_texto_imagem(dados_imagem: bytes) -> str:
-    """
-    Extrai todo o texto presente em uma imagem usando OCR.
+    """Extrai todo o texto presente em uma imagem usando OCR.
 
-    Aplica filtro de confiança para descartar leituras com baixa
-    certeza e retorna o texto concatenado por linhas.
-
-    Args:
-        dados_imagem: Conteúdo binário da imagem.
-
-    Returns:
-        Texto extraído como string única. Retorna string vazia se
-        nenhum texto for identificado com confiança suficiente.
-
-    Raises:
-        ValueError: Se o formato da imagem for inválido ou corrompido.
+    Adiciona normalizações pós-OCR para reduzir erros comuns (principalmente
+    acentos e trocas típicas entre caracteres parecidos).
     """
     try:
         imagem = _abrir_imagem(dados_imagem)
@@ -70,17 +59,51 @@ def extrair_texto_imagem(dados_imagem: bytes) -> str:
     logger.info("Executando OCR na imagem...")
     resultados = reader.readtext(array_imagem)
 
-    # Filtra por confiança mínima e extrai apenas o texto
-    blocos = [
+    blocos: list[str] = [
         texto.strip()
         for (_bbox, texto, confianca) in resultados
         if confianca >= _CONFIANCA_MINIMA and texto.strip()
     ]
 
     texto_final = " ".join(blocos)
-    logger.info("OCR concluído: %d blocos extraídos.", len(blocos))
+    texto_final = _normalizar_texto_ocr(texto_final)
 
+    logger.info("OCR concluído: %d blocos extraídos.", len(blocos))
     return texto_final
+
+
+def _normalizar_texto_ocr(texto: str) -> str:
+    """Normalizações determinísticas para acentos e erros comuns de OCR."""
+    if not texto:
+        return ""
+
+    t = texto
+
+    # Normaliza espaços
+    t = " ".join(t.split())
+
+    # Correções pontuais (casos frequentes em PT-BR)
+    # Mantemos poucas regras para não distorcer texto legítimo.
+    correcao = {
+        "ÁCUA": "ÁGUA",
+        "ÁCUA ": "ÁGUA ",
+        "ACUA": "ÁGUA",
+        "DOEIIÇAS": "DOENÇAS",
+        "DOENIIÇAS": "DOENÇAS",
+        "DOENÇAS": "DOENÇAS",
+        "DOE NÇAS": "DOENÇAS",
+        "DOENÇAS.": "DOENÇAS.",
+    }
+
+    for k, v in correcao.items():
+        t = t.replace(k, v)
+
+    # Heurística para pequenas duplicações e ruído
+    # Ex.: "DOOENÇAS" -> "DOENÇAS" (não remove letras muito agressivamente)
+    t = re.sub(r"\b([A-ZÁÉÍÓÚÂÊÔÃÕÇ])\1{1,}", r"\1", t)
+
+    return t
+
 
 
 def validar_imagem(content_type: str, filename: str) -> None:
@@ -105,21 +128,57 @@ def validar_imagem(content_type: str, filename: str) -> None:
 
 
 def _abrir_imagem(dados: bytes) -> Image.Image:
-    """
-    Abre a imagem a partir de bytes e normaliza para RGB.
-
-    Converte imagens RGBA ou com paleta (modo P) para RGB,
-    pois o EasyOCR espera imagens no formato padrão.
-
-    Args:
-        dados: Bytes da imagem.
-
-    Returns:
-        Objeto PIL.Image em modo RGB.
-    """
+    """Abre e normaliza a imagem para melhorar a leitura do OCR."""
     imagem = Image.open(io.BytesIO(dados))
 
+    # Normaliza modo
     if imagem.mode in ("RGBA", "P", "LA"):
         imagem = imagem.convert("RGB")
 
+    # Grayscale
+    imagem = imagem.convert("L")
+
+    # Aumenta contraste automaticamente (reduz problemas por iluminação)
+    try:
+        from PIL import ImageOps
+
+        imagem = ImageOps.autocontrast(imagem)
+    except Exception:
+        pass
+
+    # Binarização (limiar adaptado simples via Otsu se disponível)
+    try:
+        # Evita adicionar dependência forte; se não funcionar, cai no fallback.
+        import numpy as _np
+
+        arr = _np.array(imagem)
+        # Otsu simples
+        hist, bin_edges = _np.histogram(arr.flatten(), bins=256, range=(0, 255))
+        total = arr.size
+        sum_total = _np.dot(_np.arange(256), hist)
+        sum_b, w_b, w_f = 0.0, 0.0, 0.0
+        max_var, threshold = -1.0, 140
+        for t in range(256):
+            w_b += hist[t]
+            if w_b == 0:
+                continue
+            w_f = total - w_b
+            if w_f == 0:
+                break
+            sum_b += t * hist[t]
+            m_b = sum_b / w_b
+            m_f = (sum_total - sum_b) / w_f
+            var_between = w_b * w_f * (m_b - m_f) ** 2
+            if var_between > max_var:
+                max_var = var_between
+                threshold = t
+
+        imagem = imagem.point(lambda x: 0 if x < threshold else 255, "1")
+    except Exception:
+        # Fallback para threshold fixo (mantém compatibilidade)
+        imagem = imagem.point(lambda x: 0 if x < 140 else 255, "1")
+
+    # Volta para RGB para compatibilidade com o EasyOCR
+    imagem = imagem.convert("RGB")
     return imagem
+

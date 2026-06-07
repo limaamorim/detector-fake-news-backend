@@ -77,8 +77,34 @@ async def analisar_url(request: URLAnalysisRequest) -> AnalysisResponse:
     texto_para_ia = sanitizar_texto(conteudo.texto)
     analise_ia = await analisar_texto_com_ia(texto_para_ia)
 
+    # --- Validação de tema (saúde) antes do scoring ---
+    from app.services.theme_detection_service import verificar_tema_saude
+
+    tema = verificar_tema_saude(analise_ia=analise_ia, texto_base=conteudo.texto)
+    if not tema.tema_suportado:
+        mensagem = (
+            "O FakeCheck AI foi desenvolvido para analisar conteúdos relacionados à saúde. "
+            "O conteúdo enviado não pertence a essa categoria."
+        )
+        return AnalysisResponse(
+            score=0,
+            classificacao="Tema não suportado",
+            tipo="url",
+            titulo=conteudo.titulo,
+            resumo=mensagem,
+            fonte=None,
+            indicadores={"evidencias": 0, "referencias": 0, "sensacionalismo": 0},
+            pontos_positivos=[],
+            pontos_atencao=[mensagem],
+            possiveis_inconsistencias=[],
+            tema_suportado=False,
+            tema_detectado=tema.tema_detectado,
+            mensagem=mensagem,
+        )
+
     # --- Cálculo do score (regras do backend) ---
     resultado = calcular_score_url(conteudo, analise_ia)
+
 
     logger.info(
         "Análise de URL concluída: score=%d, classificação=%s",
@@ -168,8 +194,34 @@ async def analisar_imagem(
     texto_para_ia = sanitizar_texto(texto_extraido)
     analise_ia = await analisar_texto_com_ia(texto_para_ia)
 
+    # --- Validação de tema (saúde) antes do scoring ---
+    from app.services.theme_detection_service import verificar_tema_saude
+
+    tema = verificar_tema_saude(analise_ia=analise_ia, texto_base=texto_extraido)
+    if not tema.tema_suportado:
+        mensagem = (
+            "O FakeCheck AI foi desenvolvido para analisar conteúdos relacionados à saúde. "
+            "O conteúdo enviado não pertence a essa categoria."
+        )
+        return AnalysisResponse(
+            score=0,
+            classificacao="Tema não suportado",
+            tipo="image",
+            titulo=None,
+            resumo=mensagem,
+            fonte=None,
+            indicadores={"evidencias": 0, "referencias": 0, "sensacionalismo": 0},
+            pontos_positivos=[],
+            pontos_atencao=[mensagem],
+            possiveis_inconsistencias=[],
+            tema_suportado=False,
+            tema_detectado=tema.tema_detectado,
+            mensagem=mensagem,
+        )
+
     # --- Cálculo do score (regras do backend) ---
     resultado = calcular_score_imagem(analise_ia)
+
 
     # Adiciona o texto extraído ao título para contexto
     resultado.titulo = texto_extraido[:200] if texto_extraido else None
