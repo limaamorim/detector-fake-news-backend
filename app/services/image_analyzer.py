@@ -39,7 +39,7 @@ def _get_reader() -> easyocr.Reader:
         Instância configurada do EasyOCR Reader.
     """
     logger.info("Carregando modelo EasyOCR (pt + en)...")
-    return easyocr.Reader(["pt", "en"], gpu=False)
+    return easyocr.Reader(["pt"], gpu=False)
 
 
 def extrair_texto_imagem(dados_imagem: bytes) -> str:
@@ -58,6 +58,7 @@ def extrair_texto_imagem(dados_imagem: bytes) -> str:
 
     logger.info("Executando OCR na imagem...")
     resultados = reader.readtext(array_imagem)
+    del array_imagem
 
     blocos: list[str] = [
         texto.strip()
@@ -69,6 +70,8 @@ def extrair_texto_imagem(dados_imagem: bytes) -> str:
     texto_final = _normalizar_texto_ocr(texto_final)
 
     logger.info("OCR concluído: %d blocos extraídos.", len(blocos))
+    import gc
+    gc.collect()
     return texto_final
 
 
@@ -130,6 +133,10 @@ def validar_imagem(content_type: str, filename: str) -> None:
 def _abrir_imagem(dados: bytes) -> Image.Image:
     """Abre e normaliza a imagem para melhorar a leitura do OCR."""
     imagem = Image.open(io.BytesIO(dados))
+
+# Reduz imagens muito grandes para economizar memória
+    MAX_SIZE = (1200, 1200)
+    imagem.thumbnail(MAX_SIZE, Image.Resampling.LANCZOS)
 
     # Normaliza modo
     if imagem.mode in ("RGBA", "P", "LA"):
